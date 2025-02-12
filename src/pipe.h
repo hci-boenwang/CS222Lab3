@@ -29,7 +29,6 @@ typedef struct Pipe_Reg_F_D {
 	uint64_t next_PC;
 	uint32_t reg1;
 	uint32_t reg2;
-	bool valid;
 	bool is_instr;
 } Pipe_Reg_F_D;
 
@@ -52,6 +51,7 @@ typedef struct Pipe_Reg_D_X {
 	bool is_instr;
 	bool is_stur;
 	bool is_branch;
+	bool is_halt;
 	int FLAG_N;
 	int FLAG_Z;
 } Pipe_Reg_D_X;
@@ -66,6 +66,7 @@ typedef struct Pipe_Reg_X_M {
 	bool valid;
 	bool is_instr;
 	bool is_stur;
+	bool is_halt;
 	int FLAG_N;
 	int FLAG_Z;
 	bool is_branch;
@@ -80,6 +81,7 @@ typedef struct Pipe_Reg_M_W {
 	bool valid;
 	bool is_instr;
 	bool is_stur;
+	bool is_halt;
 	int FLAG_N;
 	int FLAG_Z;
 	bool is_branch;
