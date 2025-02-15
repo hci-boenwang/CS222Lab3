@@ -30,10 +30,12 @@ typedef struct Pipe_Reg_F_D {
 	uint32_t reg1;
 	uint32_t reg2;
 	bool is_instr;
+	bool pred_taken;
 } Pipe_Reg_F_D;
 
 typedef struct Pipe_Reg_D_X {
 	uint32_t opcode;
+	uint64_t instr_PC;
 	uint64_t next_PC;
 	int64_t reg1_val;
 	int64_t reg2_val;
@@ -50,6 +52,7 @@ typedef struct Pipe_Reg_D_X {
 	bool valid;
 	bool is_instr;
 	bool is_stur;
+	bool is_load;
 	bool is_branch;
 	bool is_halt;
 	int FLAG_N;
@@ -60,7 +63,6 @@ typedef struct Pipe_Reg_X_M {
 	uint32_t dest;
 	int64_t ALU_result;
 	uint32_t mem_size;
-	uint32_t opcode;
 	int64_t reg2_val;
 	Pipe_Op op;
 	bool valid;
@@ -85,6 +87,7 @@ typedef struct Pipe_Reg_M_W {
 	int FLAG_N;
 	int FLAG_Z;
 	bool is_branch;
+	bool flag_set;
 } Pipe_Reg_M_W;
 
 /* Represents the current state of the pipeline. */

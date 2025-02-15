@@ -9,6 +9,7 @@
 
 #include "pipe.h"
 #include "shell.h"
+#include "bp.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -27,6 +28,7 @@ bool increment_decode_halt = false;
 int stall_count = 0;
 bool stall_pending = false;
 bool fetch_is_instr = true;
+bool flush_pipeline = false;
 
 
 void handle_r(uint32_t instruction); //helper functions to help with handling all sorts of the different formats
@@ -45,6 +47,7 @@ void pipe_init()
 	memset(&preg_D_X, 0, sizeof(Pipe_Reg_D_X));
 	memset(&preg_X_M, 0, sizeof(Pipe_Reg_X_M));
 	memset(&preg_M_W, 0, sizeof(Pipe_Reg_M_W));
+    bp_init();
     pipe.PC = 0x00400000;
 	RUN_BIT = true;
 }
@@ -66,17 +69,21 @@ void pipe_cycle()
 void pipe_stage_wb()
 {
     printf("INSTRUCTIONS RETIRED: %d\n", stat_inst_retire);
-    if (preg_M_W.is_branch) {
-        printf("BRANCH RETIRED\n");
-        preg_M_W.is_branch = false; //This is fine because the next instruction cant be a branch due to stalling
-        stat_inst_retire += 1;
-        return;
-    }
     if(!preg_M_W.is_instr) { //IF no instruction in this stage
         printf("[NOTHING HERE NO INSTRUCTIOON]\n");
         return;
     }
     stat_inst_retire += 1;
+    if (preg_M_W.is_halt) {
+        printf("[PIPELINE] All instructions retired. Halting simulation.\n");
+        RUN_BIT = 0;
+        return;
+    }
+    if (preg_M_W.is_branch) {
+        printf("BRANCH RETIRED\n");
+        preg_M_W.is_branch = false; //This is fine because the next instruction cant be a branch due to stalling
+        return;
+    }
     if (!preg_M_W.op.RegWrite) {
         printf("[WRITEBACK] No register write.\n");
         preg_M_W.op.RegWrite = 0;
@@ -114,11 +121,7 @@ void pipe_stage_wb()
             }
         }
     }
-    if (preg_M_W.is_halt) {
-        printf("[PIPELINE] All instructions retired. Halting simulation.\n");
-        RUN_BIT = 0;
-    }
-	else if (preg_M_W.op.MemtoReg) { //ldur
+    if (preg_M_W.op.MemtoReg) { //ldur
         printf("[WRITEBACK] Register X%d updated to: 0x%lx\n", preg_M_W.dest, preg_M_W.mem_read_val);
 		pipe.REGS[preg_M_W.dest] = preg_M_W.mem_read_val;
         preg_M_W.op.MemtoReg = 0;
@@ -128,22 +131,29 @@ void pipe_stage_wb()
 		pipe.REGS[preg_M_W.dest] = preg_M_W.ALU_result;
         printf("[WRITEBACK2] Register X%d updated to: 0x%lx\n", preg_M_W.dest, pipe.REGS[preg_M_W.dest]);
 	}
-    pipe.FLAG_N = preg_M_W.FLAG_N;
-    pipe.FLAG_Z = preg_M_W.FLAG_Z;
-    preg_D_X.FLAG_N = pipe.FLAG_N;
-    preg_D_X.FLAG_Z = pipe.FLAG_Z;
+
+    if (preg_M_W.flag_set) {
+        pipe.FLAG_N = preg_M_W.FLAG_N;
+        pipe.FLAG_Z = preg_M_W.FLAG_Z;
+        preg_D_X.FLAG_N = pipe.FLAG_N;
+        preg_D_X.FLAG_Z = pipe.FLAG_Z;
+    }
     preg_M_W.op.RegWrite = 0;
 }
 
 void pipe_stage_mem()
 {
     preg_M_W.is_instr = preg_X_M.is_instr;
-    if (preg_X_M.is_branch) {
-        preg_M_W.is_branch = preg_X_M.is_branch;
-        preg_X_M.is_branch = false; //This is fine because the next instruction cant be a branch due to stalling
+    preg_M_W.is_halt = preg_X_M.is_halt;
+    if (preg_X_M.is_halt) {
         return;
     }
     if(!preg_X_M.is_instr) { //IF no instruction in this stage
+        return;
+    }
+    if (preg_X_M.is_branch) {
+        preg_M_W.is_branch = preg_X_M.is_branch;
+        preg_X_M.is_branch = false; //This is fine because the next instruction cant be a branch due to stalling
         return;
     }
 	if (preg_X_M.op.MemRead) { //LDUR (need to remember deassert ops?)
@@ -206,30 +216,29 @@ void pipe_stage_mem()
             preg_D_X.FLAG_Z = preg_X_M.FLAG_Z;
         }  
         
-        if (preg_D_X.is_stur && !preg_X_M.is_stur) {
+        if (preg_D_X.is_stur) {
             if (preg_X_M.dest == preg_D_X.dest) { //THIS IS making it if xm dest is not a stur, but if it is a stur we do smth else
                 preg_D_X.reg2_val = preg_X_M.ALU_result;
             }
         }
-        else {
-            if ((preg_X_M.dest == preg_D_X.reg1) && (preg_X_M.dest != 31)) {
-                if (preg_X_M.op.MemtoReg) {
-                    preg_D_X.reg1_val = preg_M_W.mem_read_val;
-                }
-                else {
-                    preg_D_X.reg1_val = preg_X_M.ALU_result;
-                    printf("FORWARDING %lx\n", preg_D_X.reg1_val);
-                }
+        
+        if ((preg_X_M.dest == preg_D_X.reg1) && (preg_X_M.dest != 31)) {
+            if (preg_X_M.op.MemtoReg) {
+                preg_D_X.reg1_val = preg_M_W.mem_read_val;
             }
-            if ((preg_X_M.dest == preg_D_X.reg2) && (preg_X_M.dest != 31)) {
-                if (preg_X_M.op.MemtoReg) {
-                    preg_D_X.reg2_val = preg_M_W.mem_read_val;
-                }
-                else {
-                    preg_D_X.reg2_val = preg_X_M.ALU_result;
-                }
-                printf("FORWARDING2 %lx\n", preg_D_X.reg2_val);
+            else {
+                preg_D_X.reg1_val = preg_X_M.ALU_result;
+                printf("FORWARDING %lx\n", preg_D_X.reg1_val);
             }
+        }
+        if ((preg_X_M.dest == preg_D_X.reg2) && (preg_X_M.dest != 31)) {
+            if (preg_X_M.op.MemtoReg) {
+                preg_D_X.reg2_val = preg_M_W.mem_read_val;
+            }
+            else {
+                preg_D_X.reg2_val = preg_X_M.ALU_result;
+            }
+            printf("FORWARDING2 %lx\n", preg_D_X.reg2_val);
         }
     }
     printf("regwrite %d, dest: %d\n", preg_X_M.op.RegWrite, preg_X_M.dest);
@@ -238,9 +247,9 @@ void pipe_stage_mem()
     preg_M_W.ALU_result = preg_X_M.ALU_result; 
     preg_M_W.op = preg_X_M.op;
     preg_M_W.is_stur = preg_X_M.is_stur;
-    preg_M_W.is_halt = preg_X_M.is_halt;
     preg_M_W.FLAG_N = preg_X_M.FLAG_N;
     preg_M_W.FLAG_Z = preg_X_M.FLAG_Z;
+    preg_M_W.flag_set = preg_X_M.flag_set;
 }
 
 void pipe_stage_execute() // this stage is combining the write back and stuff so need to change this
@@ -248,6 +257,9 @@ void pipe_stage_execute() // this stage is combining the write back and stuff so
     printf("opcode %d\n", preg_D_X.opcode);
     printf("[post stur ]Reg2val: %lx\n", preg_D_X.reg2_val);
     printf("reg1: %d, reg2: %d\n", preg_D_X.reg1, preg_D_X.reg2);
+    uint8_t cond = 0;
+    uint8_t branched = 0;
+    uint64_t target_PC = 0;
 
     preg_X_M.is_instr = preg_D_X.is_instr;
     if(!preg_D_X.is_instr) { //IF no instruciton at this stage
@@ -257,8 +269,6 @@ void pipe_stage_execute() // this stage is combining the write back and stuff so
     preg_X_M.flag_set = false;
 	if (preg_D_X.opcode == 0x6a2) { // HLT
         printf("[EXECUTE] HLT Executed. Halting pipeline.\n");
-        preg_X_M.opcode = preg_D_X.opcode;
-        preg_X_M.is_instr = preg_D_X.is_instr;
     } else if (preg_D_X.opcode == 0x458) { // ADD (Done)
         printf("ADD?\n");
 		preg_X_M.ALU_result = preg_D_X.reg1_val + preg_D_X.reg2_val;
@@ -283,22 +293,29 @@ void pipe_stage_execute() // this stage is combining the write back and stuff so
         preg_X_M.flag_set = true;
     } else if (preg_D_X.opcode >= 0x5A8 && preg_D_X.opcode <= 0x5AF) { // CBNZ (Done)
         printf("CBNZ: address:%lx\n", preg_D_X.addr);
+        cond = 1;
+        target_PC = preg_D_X.addr;
         preg_F_D.is_instr = false; 
         if (preg_D_X.addr != preg_D_X.next_PC) {//IF THE ADDRESS BRANCHING IS NOT THE SAME AS OUR NEXT ADDRESS
             if (preg_D_X.reg2_val != 0) { 
+                branched = 1;
                 pipe.PC = preg_D_X.addr;
                 fetch_is_instr = false; 
             }
         }
     } else if (preg_D_X.opcode >= 0x5A0 && preg_D_X.opcode <= 0x5A7) { // CBZ (Done)
         printf("CBZ: address:%lx\n", preg_D_X.addr);
+        cond = 1;
+        target_PC = preg_D_X.addr;
         preg_F_D.is_instr = false; 
         if (preg_D_X.addr != preg_D_X.next_PC) {//IF THE ADDRESS BRANCHING IS NOT THE SAME AS OUR NEXT ADDRESS
-            if (preg_D_X.reg2_val == 0) { 
+            if (preg_D_X.reg2_val == 0) {
+                branched = 1; 
                 pipe.PC = preg_D_X.addr;
                 fetch_is_instr = false; 
             }
         }
+
     } else if (preg_D_X.opcode == 0x450) { // AND (Done)
 		preg_X_M.ALU_result = preg_D_X.reg1_val & preg_D_X.reg2_val;
         preg_X_M.op.RegWrite = 1;
@@ -396,18 +413,19 @@ void pipe_stage_execute() // this stage is combining the write back and stuff so
         preg_X_M.ALU_result = preg_D_X.reg1_val * preg_D_X.reg2_val;
         preg_X_M.op.RegWrite = 1;
     } else if (preg_D_X.opcode == 0x6B0) { // BR (Done?)]
-        //[HAD A GO] make it so decode doesnt hapen and we reset our fetch here
         preg_F_D.is_instr = false;
+        target_PC = preg_D_X.reg2_val;
         if (preg_D_X.reg2_val != preg_D_X.next_PC) {//IF THE ADDRESS BRANCHING IS NOT THE SAME AS OUR NEXT ADDRESS
+            branched = 1;
             pipe.PC = preg_D_X.reg2_val;
             fetch_is_instr = false;
         }
     } else if (preg_D_X.opcode >= 0x0A0 && preg_D_X.opcode <= 0x0BF) { // B (Done)
-        //[HAD A GO] make it so decode doesnt hapen and we reset our fetch here
-        printf("[BRANCH CHECK] addr: %lx\n", preg_D_X.addr);
         preg_F_D.is_instr = false; 
+        target_PC = preg_D_X.addr;
         printf("dxaddr: %lx, pipe.pc: %lx", preg_D_X.addr, preg_D_X.next_PC);
         if (preg_D_X.addr != preg_D_X.next_PC) {//IF THE ADDRESS BRANCHING IS NOT THE SAME AS OUR NEXT ADDRESS
+            branched = 1;
             pipe.PC = preg_D_X.addr;
             printf("SO ITS A DIFF ADDRESS\n");
             fetch_is_instr = false;
@@ -415,6 +433,8 @@ void pipe_stage_execute() // this stage is combining the write back and stuff so
     } else if (preg_D_X.opcode >= 0x2A0 && preg_D_X.opcode <= 0x2A7) { // BEQ, BNE, BGT, BLT, BGE, BLE
         // Handle conditional branches
         preg_F_D.is_instr = false; 
+        cond = 1;
+        target_PC = preg_D_X.addr;
         uint32_t condition_met = 0;
         if (preg_D_X.rt == 0x0) { //BEQ
             condition_met = (preg_D_X.FLAG_Z == 1); //FORWARD THESE FLAGS
@@ -430,8 +450,15 @@ void pipe_stage_execute() // this stage is combining the write back and stuff so
             condition_met = (preg_D_X.FLAG_Z == 1 || preg_D_X.FLAG_N == 1);
         }
         if (condition_met && preg_D_X.addr != preg_D_X.next_PC) { //branch if condition is met and not same address
+            branched = 1;
             pipe.PC = preg_D_X.addr; 
             fetch_is_instr = false;
+        }
+    }
+    if (preg_D_X.is_branch) {
+        bp_update(preg_D_X.instr_PC, cond, target_PC, branched);
+        if (branched) {
+            flush_pipeline = true;
         }
     }
     preg_X_M.is_stur = preg_D_X.is_stur;
@@ -444,7 +471,12 @@ void pipe_stage_execute() // this stage is combining the write back and stuff so
 
 void pipe_stage_decode()
 {
+    if (flush_pipeline) {
+        preg_D_X.is_instr = false;
+        return;
+    }
     preg_D_X.is_instr = preg_F_D.is_instr;
+    preg_D_X.instr_PC = preg_F_D.instr_PC;
     if(!preg_F_D.is_instr) { //IF THE INSTRUCTION IS NOT AN ACTUAL INSTRUCTION YET
         return;
     }
@@ -465,6 +497,7 @@ void pipe_stage_decode()
         return;
     }
     preg_D_X.is_stur = false;
+    preg_D_X.is_load = false;
     preg_D_X.is_branch = false;
     stall_pending = false;
     uint32_t op0 = extract_bits(preg_F_D.instruction, 25, 28); // Extract bits 28–25
@@ -493,7 +526,7 @@ void pipe_stage_decode()
     }
     printf("[PRESTALL INFO2] MEMRead: %x | LDUR destination: X%d | Decode needs: X%d or X%d\n",
         preg_X_M.op.MemRead, preg_X_M.dest, preg_D_X.reg1, preg_D_X.reg2);
-    if (preg_X_M.op.MemRead && (preg_X_M.dest == preg_D_X.reg1 || preg_X_M.dest == preg_D_X.reg2)) { //LOAD HAZARD
+    if (preg_X_M.op.MemRead && (preg_X_M.dest == preg_D_X.reg1 || preg_X_M.dest == preg_D_X.reg2) && !preg_D_X.is_load) { //LOAD HAZARD
         printf("[STALL] Load-use hazard detected. Stalling pipeline.\n");
         // Hold the instruction in Decode, and prevent Fetch from updating
         stall_pending = true;
@@ -506,6 +539,11 @@ void pipe_stage_decode()
 
 void pipe_stage_fetch()
 {
+    if (flush_pipeline) {
+        flush_pipeline = false;
+        return;
+    }
+
     if (stall_pending) { //branch stall (we stall after fetch for one stage)
         stall_pending = false;
         stall_count++;
@@ -533,11 +571,14 @@ void pipe_stage_fetch()
         }
         return;
     }
+
     printf("[FETCH] PC: 0x%lx | Instr: 0x%08x\n", pipe.PC, instruction);
     preg_F_D.is_instr = true; 
+
+    //predicted PC
+    bp_predict(pipe.PC, &preg_F_D.next_PC, &preg_F_D.pred_taken);
     preg_F_D.instr_PC = pipe.PC;
-	pipe.PC = pipe.PC + 4; 
-    preg_F_D.next_PC = pipe.PC;
+	pipe.PC = preg_F_D.next_PC; 
 }
 
 
@@ -582,6 +623,9 @@ void handle_d(uint32_t instruction) {
     if ((preg_D_X.opcode == 0x7C0) || (preg_D_X.opcode == 0x1C0) || (preg_D_X.opcode == 0x3C0)) { // STUR opcodes
         preg_D_X.is_stur = true;
     } 
+    else {
+        preg_D_X.is_load = true;
+    }
     uint64_t dt_offset = extract_bits(instruction, 12, 20);
     dt_offset = sign_extend(dt_offset, 8);
     preg_D_X.reg1 = extract_bits(instruction, 5, 9);
