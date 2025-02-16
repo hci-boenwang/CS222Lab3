@@ -28,11 +28,10 @@ typedef struct
     uint8_t *btb_cond;
 } bp_t;
 
+void bp_init(bp_t *bp);
 
-void bp_init();
+void bp_predict(bp_t *bp, uint64_t PC, uint64_t *pred_PC, uint8_t *btb_miss);
 
-void bp_predict(uint64_t PC, uint64_t *pred_PC, bool *pred_taken);
-
-void bp_update(uint64_t PC, uint8_t cond, uint64_t target_PC, uint8_t branched);
+void bp_update(bp_t *bp, uint64_t PC, uint8_t cond, uint64_t target_PC, uint8_t branched);
 
 #endif

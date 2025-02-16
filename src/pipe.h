@@ -11,6 +11,7 @@
 #define _PIPE_H_
 
 #include "shell.h"
+#include "bp.h"
 #include "stdbool.h"
 #include <limits.h>
 
@@ -27,16 +28,18 @@ typedef struct Pipe_Reg_F_D {
 	uint32_t instruction;
 	uint64_t instr_PC;
 	uint64_t next_PC;
+	uint64_t pred_PC;
 	uint32_t reg1;
 	uint32_t reg2;
 	bool is_instr;
-	bool pred_taken;
+	uint8_t btb_miss;
 } Pipe_Reg_F_D;
 
 typedef struct Pipe_Reg_D_X {
 	uint32_t opcode;
 	uint64_t instr_PC;
 	uint64_t next_PC;
+	uint64_t pred_PC;
 	int64_t reg1_val;
 	int64_t reg2_val;
 	uint64_t imm;
@@ -57,6 +60,7 @@ typedef struct Pipe_Reg_D_X {
 	bool is_halt;
 	int FLAG_N;
 	int FLAG_Z;
+	uint8_t btb_miss;
 } Pipe_Reg_D_X;
 
 typedef struct Pipe_Reg_X_M {
@@ -101,6 +105,8 @@ typedef struct Pipe_State {
 	uint64_t PC;
 
 	/* place other information here as necessary */
+	bp_t *bp;
+
 } Pipe_State;
 
 extern int RUN_BIT;
@@ -120,5 +126,15 @@ void pipe_stage_decode();
 void pipe_stage_execute();
 void pipe_stage_mem();
 void pipe_stage_wb();
+
+/* helper functions */
+void handle_r(uint32_t instruction);
+void handle_i(uint32_t instruction);
+void handle_d(uint32_t instruction);
+void handle_b(uint32_t instruction);
+void handle_cb(uint32_t instruction);
+void handle_iw(uint32_t instruction);
+uint64_t sign_extend(uint64_t imm, uint32_t sign_bit);
+uint64_t extract_bits(uint32_t instruction, uint32_t start, uint32_t end);
 
 #endif
