@@ -37,6 +37,7 @@ do
 					i=2
 			fi
 			diff ./dumpsim src/dumpsim >> test/diff_final_${inputfile}.txt
+			diff ./dumpsim ./src/dumpsim >> test/diff_${inputfile}.txt
 		done
 		if [ -s test/diff_final_${inputfile}.txt ] # if the file is not empty
 		then
