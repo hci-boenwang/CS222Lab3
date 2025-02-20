@@ -46,7 +46,7 @@ void pipe_init()
 void pipe_cycle()
 {
     static int cycle_count = 1; //DEBUG
-    printf("\n==== Cycle %d ====\n", cycle_count++); //DEBUG
+    // printf("\n==== Cycle %d ====\n", cycle_count++); //DEBUG
 
 	pipe_stage_wb();
 	pipe_stage_mem();
@@ -59,68 +59,68 @@ void pipe_cycle()
 
 void pipe_stage_wb()
 {
-    printf("INSTRUCTIONS RETIRED: %d\n", stat_inst_retire);
+    // printf("INSTRUCTIONS RETIRED: %d\n", stat_inst_retire);
     if(!preg_M_W.is_instr) { //IF no instruction in this stage
-        printf("[NOTHING HERE NO INSTRUCTIOON]\n");
+        // printf("[NOTHING HERE NO INSTRUCTIOON]\n");
         return;
     }
     stat_inst_retire += 1;
     if (preg_M_W.is_halt) {
-        printf("[PIPELINE] All instructions retired. Halting simulation.\n");
+        // printf("[PIPELINE] All instructions retired. Halting simulation.\n");
         RUN_BIT = 0;
         return;
     }
     if (preg_M_W.is_branch) {
-        printf("BRANCH RETIRED\n");
+        // printf("BRANCH RETIRED\n");
         preg_M_W.is_branch = false; //This is fine because the next instruction cant be a branch due to stalling
         return;
     }
     if (!preg_M_W.op.RegWrite) {
-        printf("[WRITEBACK] No register write.\n");
+        // printf("[WRITEBACK] No register write.\n");
         preg_M_W.op.RegWrite = 0;
         return;
     }
     // Forward from WB stage (MEM/WB → EX) [SEEMS TO WORK NOW]
     if (preg_M_W.op.RegWrite) {
-        printf("[WRITEBACK] WE ENTER MEM/WB FORWARD\n");
+        // printf("[WRITEBACK] WE ENTER MEM/WB FORWARD\n");
         if (preg_D_X.is_stur) {
-            printf("[WRITEBACK TRY to stur] MWDest: %d and DXdest: %d\n", preg_M_W.dest, preg_D_X.dest);
+            // printf("[WRITEBACK TRY to stur] MWDest: %d and DXdest: %d\n", preg_M_W.dest, preg_D_X.dest);
             if ((preg_M_W.dest == preg_D_X.dest) && (preg_M_W.dest != 31)) {
-                printf("[WRITEBACK to stur] Dest: %d, set to REG2: %lx\n", preg_M_W.dest, preg_M_W.ALU_result);
+                // printf("[WRITEBACK to stur] Dest: %d, set to REG2: %lx\n", preg_M_W.dest, preg_M_W.ALU_result);
                 preg_D_X.reg2_val = preg_M_W.ALU_result;
             }
         }
         if ((preg_M_W.dest == preg_D_X.reg1) && (preg_M_W.dest != 31)) {
-            printf("[WRITEBACK] ReferringVal: %d, REG1: %d\n", preg_M_W.dest, preg_D_X.reg1);
+            // printf("[WRITEBACK] ReferringVal: %d, REG1: %d\n", preg_M_W.dest, preg_D_X.reg1);
             if (preg_M_W.op.MemtoReg) { //IF FORWARDING FROM A LOAD
-                printf("[WRITEBACK] from load] Destination: %d, REG1Val: %lx\n", preg_M_W.dest, preg_M_W.mem_read_val);
+                // printf("[WRITEBACK] from load] Destination: %d, REG1Val: %lx\n", preg_M_W.dest, preg_M_W.mem_read_val);
                 preg_D_X.reg1_val = preg_M_W.mem_read_val;
             }
             else {
                 preg_D_X.reg1_val = preg_M_W.ALU_result;
             }
-            printf("FORWARDING3 %lx\n", preg_D_X.reg1_val);
+            // printf("FORWARDING3 %lx\n", preg_D_X.reg1_val);
         }
         if ((preg_M_W.dest == preg_D_X.reg2) && (preg_M_W.dest != 31)) {
             if (preg_M_W.op.MemtoReg) {
                 preg_D_X.reg2_val = preg_M_W.mem_read_val;
-                printf("FORWARDEDYAY\n");
+                // printf("FORWARDEDYAY\n");
             }
             else {
                 preg_D_X.reg2_val = preg_M_W.ALU_result;
-                printf("FORWARDING4 reg2:%d dest: %d, %lx\n", preg_D_X.reg2, preg_M_W.dest, preg_M_W.ALU_result);
+                // printf("FORWARDING4 reg2:%d dest: %d, %lx\n", preg_D_X.reg2, preg_M_W.dest, preg_M_W.ALU_result);
             }
         }
     }
     if (preg_M_W.op.MemtoReg) { //ldur
-        printf("[WRITEBACK] Register X%d updated to: 0x%lx\n", preg_M_W.dest, preg_M_W.mem_read_val);
+        // printf("[WRITEBACK] Register X%d updated to: 0x%lx\n", preg_M_W.dest, preg_M_W.mem_read_val);
 		pipe.REGS[preg_M_W.dest] = preg_M_W.mem_read_val;
         preg_M_W.op.MemtoReg = 0;
         preg_X_M.op.MemtoReg = 0;
 	}
 	else if (preg_M_W.dest != 31){
 		pipe.REGS[preg_M_W.dest] = preg_M_W.ALU_result;
-        printf("[WRITEBACK2] Register X%d updated to: 0x%lx\n", preg_M_W.dest, pipe.REGS[preg_M_W.dest]);
+        // printf("[WRITEBACK2] Register X%d updated to: 0x%lx\n", preg_M_W.dest, pipe.REGS[preg_M_W.dest]);
 	}
 
     if (preg_M_W.flag_set) {
@@ -152,25 +152,25 @@ void pipe_stage_mem()
             uint32_t low = mem_read_32(preg_X_M.ALU_result);        // Read lower 32 bits
             uint32_t high = mem_read_32(preg_X_M.ALU_result + 4);   // Read upper 32 bits
             preg_M_W.mem_read_val = ((uint64_t)high << 32) | low;   // Combine into 64-bit value
-            printf("LDURB0 %lx\n", preg_M_W.mem_read_val);
-            printf("low: %d, high: %d \n", low, high);
+            // printf("LDURB0 %lx\n", preg_M_W.mem_read_val);
+            // printf("low: %d, high: %d \n", low, high);
         } else if (preg_X_M.mem_size ==  32) {
             preg_M_W.mem_read_val = mem_read_32(preg_X_M.ALU_result);
-            printf("LDURB1 %lx\n", preg_M_W.mem_read_val);
+            // printf("LDURB1 %lx\n", preg_M_W.mem_read_val);
         } else if (preg_X_M.mem_size == 16) {
             preg_M_W.mem_read_val = mem_read_32(preg_X_M.ALU_result) & 0xFFFF;
-            printf("LDURB2 %lx\n", preg_M_W.mem_read_val);
+            // printf("LDURB2 %lx\n", preg_M_W.mem_read_val);
         } else if (preg_X_M.mem_size == 8) {
             preg_M_W.mem_read_val = mem_read_32(preg_X_M.ALU_result) & 0xFF;
-            printf("LDURB3 %lx\n", preg_M_W.mem_read_val);
+            // printf("LDURB3 %lx\n", preg_M_W.mem_read_val);
         }
         preg_X_M.op.MemtoReg = 1;
-        printf("[MEMORY] Loaded Value: 0x%lx from Addr: 0x%lx\n", preg_M_W.mem_read_val, preg_X_M.ALU_result);
-        printf("[MEMORY] ALU Result: 0x%lx | Mem Read: %d | Mem Write: %d MWMemtoreg:%d\n", preg_X_M.ALU_result, preg_X_M.op.MemRead, preg_X_M.op.MemWrite,preg_X_M.op.MemtoReg);
+        // printf("[MEMORY] Loaded Value: 0x%lx from Addr: 0x%lx\n", preg_M_W.mem_read_val, preg_X_M.ALU_result);
+        // printf("[MEMORY] ALU Result: 0x%lx | Mem Read: %d | Mem Write: %d MWMemtoreg:%d\n", preg_X_M.ALU_result, preg_X_M.op.MemRead, preg_X_M.op.MemWrite,preg_X_M.op.MemtoReg);
         preg_X_M.op.MemRead = 0;
 	}
 	else if (preg_X_M.op.MemWrite) { //STUR
-        printf("STURRRR\n");
+        // printf("STURRRR\n");
         if (preg_X_M.mem_size ==  64) {
             // Split 64-bit value into two 32-bit values
             uint32_t low = (uint32_t)(preg_X_M.reg2_val & 0xFFFFFFFF);   // Lower 32 bits
@@ -179,35 +179,34 @@ void pipe_stage_mem()
             mem_write_32(preg_X_M.ALU_result, low);
             // Write the upper 32 bits to the next memory address (word-aligned)
             mem_write_32(preg_X_M.ALU_result + 4, high);
-            printf("[MEMORY] Stored 64-bit Value: 0x%lx at Addr: 0x%lx (low: 0x%x, high: 0x%x)\n",
-                preg_X_M.reg2_val, preg_X_M.ALU_result, low, high);
+            // printf("[MEMORY] Stored 64-bit Value: 0x%lx at Addr: 0x%lx (low: 0x%x, high: 0x%x)\n", preg_X_M.reg2_val, preg_X_M.ALU_result, low, high);
         } else if (preg_X_M.mem_size ==  32) {
             mem_write_32(preg_X_M.ALU_result, preg_X_M.reg2_val);
-            printf("[MEMORY] Stored Value: 0x%lx to Addr: 0x%lx\n", preg_X_M.reg2_val, preg_X_M.ALU_result);
+            // printf("[MEMORY] Stored Value: 0x%lx to Addr: 0x%lx\n", preg_X_M.reg2_val, preg_X_M.ALU_result);
         } else if (preg_X_M.mem_size ==  16) {
             uint32_t data = mem_read_32(preg_X_M.ALU_result);
             data = ((data & ~0xFFFF) | (preg_X_M.reg2_val & 0xFFFF));
             mem_write_32(preg_X_M.ALU_result, data);
         } else if (preg_X_M.mem_size ==  8) {
-            printf("WE HAVE STURRB\n");
+            // printf("WE HAVE STURRB\n");
             uint32_t data = mem_read_32(preg_X_M.ALU_result);
             data = ((data & ~0xFF) | (preg_X_M.reg2_val & 0xFF));
             mem_write_32(preg_X_M.ALU_result, data);
-            printf("[MEMORY] Reg2 Value: 0x%lx to Addr: 0x%lx, data: %d\n", preg_X_M.reg2_val, preg_X_M.ALU_result, data);
+            // printf("[MEMORY] Reg2 Value: 0x%lx to Addr: 0x%lx, data: %d\n", preg_X_M.reg2_val, preg_X_M.ALU_result, data);
         }
         preg_X_M.op.MemWrite = 0;
         preg_X_M.op.RegWrite = 0;
     }
 
     if (preg_D_X.is_branch && preg_X_M.flag_set) {
-        printf("Forwarding Flags\n");
+        // printf("Forwarding Flags\n");
         preg_D_X.FLAG_N = preg_X_M.FLAG_N;
         preg_D_X.FLAG_Z = preg_X_M.FLAG_Z;
     }  
     // Forward from MEM stage (EX/MEM → EX) (LDUR instructions)
     if (preg_X_M.op.RegWrite) { //SEEMS LIKE THIS IS WORKING CORRECTLY FOR NOW reg1 should not be 1 but 4 i think for 1b cycle 7 need to figure out
-        printf("WE ENTER EX/MEM FORWARD\n");
-        printf("reg1 %d, dest: %d\n", preg_D_X.reg1, preg_X_M.dest);
+        // printf("WE ENTER EX/MEM FORWARD\n");
+        // printf("reg1 %d, dest: %d\n", preg_D_X.reg1, preg_X_M.dest);
         
         if (preg_D_X.is_stur) {
             if (preg_X_M.dest == preg_D_X.dest) { //THIS IS making it if xm dest is not a stur, but if it is a stur we do smth else
@@ -221,7 +220,7 @@ void pipe_stage_mem()
             }
             else {
                 preg_D_X.reg1_val = preg_X_M.ALU_result;
-                printf("FORWARDING %lx\n", preg_D_X.reg1_val);
+                // printf("FORWARDING %lx\n", preg_D_X.reg1_val);
             }
         }
         if ((preg_X_M.dest == preg_D_X.reg2) && (preg_X_M.dest != 31)) {
@@ -231,11 +230,11 @@ void pipe_stage_mem()
             else {
                 preg_D_X.reg2_val = preg_X_M.ALU_result;
             }
-            printf("FORWARDING2 %lx\n", preg_D_X.reg2_val);
+            // printf("FORWARDING2 %lx\n", preg_D_X.reg2_val);
         }
     }
-    printf("regwrite %d, dest: %d\n", preg_X_M.op.RegWrite, preg_X_M.dest);
-    printf("xmdest:%d, mwdest:%d\n", preg_X_M.dest, preg_M_W.dest);
+    // printf("regwrite %d, dest: %d\n", preg_X_M.op.RegWrite, preg_X_M.dest);
+    // printf("xmdest:%d, mwdest:%d\n", preg_X_M.dest, preg_M_W.dest);
     preg_M_W.dest = preg_X_M.dest;
     preg_M_W.ALU_result = preg_X_M.ALU_result; 
     preg_M_W.op = preg_X_M.op;
@@ -247,9 +246,9 @@ void pipe_stage_mem()
 
 void pipe_stage_execute() // this stage is combining the write back and stuff so need to change this
 {
-    printf("opcode %d\n", preg_D_X.opcode);
-    printf("[post stur ]Reg2val: %lx\n", preg_D_X.reg2_val);
-    printf("reg1: %d, reg2: %d\n", preg_D_X.reg1, preg_D_X.reg2);
+    // printf("opcode %d\n", preg_D_X.opcode);
+    // printf("[post stur ]Reg2val: %lx\n", preg_D_X.reg2_val);
+    // printf("reg1: %d, reg2: %d\n", preg_D_X.reg1, preg_D_X.reg2);
     uint8_t cond = 0;
     uint8_t branched = 0;
     uint64_t target_PC = 0;
@@ -261,7 +260,7 @@ void pipe_stage_execute() // this stage is combining the write back and stuff so
     }
     preg_X_M.flag_set = false;
 	if (preg_D_X.opcode == 0x6a2) { // HLT
-        printf("[EXECUTE] HLT Executed. Halting pipeline.\n");
+        // printf("[EXECUTE] HLT Executed. Halting pipeline.\n");
     } else if (preg_D_X.opcode == 0x458) { // ADD (Done)
 		preg_X_M.ALU_result = preg_D_X.reg1_val + preg_D_X.reg2_val;
         preg_X_M.op.RegWrite = 1;
@@ -281,7 +280,7 @@ void pipe_stage_execute() // this stage is combining the write back and stuff so
         preg_X_M.FLAG_N = (preg_X_M.ALU_result < 0);
         preg_X_M.flag_set = true;
     } else if (preg_D_X.opcode >= 0x5A8 && preg_D_X.opcode <= 0x5AF) { // CBNZ (Done)
-        printf("CBNZ: address:%lx\n", preg_D_X.addr);
+        // printf("CBNZ: address:%lx\n", preg_D_X.addr);
         cond = 1;
         target_PC = preg_D_X.addr;
         // preg_F_D.is_instr = false; 
@@ -296,7 +295,7 @@ void pipe_stage_execute() // this stage is combining the write back and stuff so
             }
         }
     } else if (preg_D_X.opcode >= 0x5A0 && preg_D_X.opcode <= 0x5A7) { // CBZ (Done)
-        printf("CBZ: address:%lx\n", preg_D_X.addr);
+        // printf("CBZ: address:%lx\n", preg_D_X.addr);
         cond = 1;
         target_PC = preg_D_X.addr;
         // preg_F_D.is_instr = false; 
@@ -350,7 +349,7 @@ void pipe_stage_execute() // this stage is combining the write back and stuff so
         if (preg_D_X.imms == 0x3f) { //LSRI (Done)
             preg_X_M.ALU_result = preg_D_X.reg1_val >> preg_D_X.immr;
         } else { //LSLI (Done)
-            printf("reg1val:%lx, immediate:%d\n", preg_D_X.reg1_val, (63 - preg_D_X.imms));
+            // printf("reg1val:%lx, immediate:%d\n", preg_D_X.reg1_val, (63 - preg_D_X.imms));
             preg_X_M.ALU_result = preg_D_X.reg1_val << (63 - preg_D_X.imms);
         }
         preg_X_M.op.RegWrite = 1;
@@ -389,7 +388,7 @@ void pipe_stage_execute() // this stage is combining the write back and stuff so
         preg_X_M.FLAG_Z = (result == 0);
         preg_X_M.FLAG_N = (result < 0);
         preg_X_M.flag_set = true;
-        printf("[CMP] Result: %ld, FLAG_Z: %d, FLAG_N: %d\n", result, preg_X_M.FLAG_Z, preg_X_M.FLAG_N);
+        // printf("[CMP] Result: %ld, FLAG_Z: %d, FLAG_N: %d\n", result, preg_X_M.FLAG_Z, preg_X_M.FLAG_N);
         //Handles CMP
         if (preg_D_X.dest != 31) { // XZR is register 31
             preg_X_M.ALU_result = result;
@@ -437,7 +436,7 @@ void pipe_stage_execute() // this stage is combining the write back and stuff so
         } else if (preg_D_X.rt == 0x1) { //BNE
             condition_met = (preg_D_X.FLAG_Z == 0);
         } else if (preg_D_X.rt == 0xC) { //BGT
-            printf("[BGT] FLAG_Z: %d, FLAG_N: %d\n", preg_D_X.FLAG_Z, preg_D_X.FLAG_N);
+            // printf("[BGT] FLAG_Z: %d, FLAG_N: %d\n", preg_D_X.FLAG_Z, preg_D_X.FLAG_N);
             condition_met = (preg_D_X.FLAG_Z == 0 && preg_D_X.FLAG_N == 0);
         } else if (preg_D_X.rt == 0xB) { //BLT
             condition_met = (preg_D_X.FLAG_N == 1);
@@ -468,15 +467,15 @@ void pipe_stage_execute() // this stage is combining the write back and stuff so
     preg_X_M.is_stur = preg_D_X.is_stur;
     preg_X_M.is_branch = preg_D_X.is_branch;
     preg_X_M.is_halt = preg_D_X.is_halt;
-    printf("xmdest %d, dxdest %d", preg_X_M.dest, preg_D_X.dest);
+    // printf("xmdest %d, dxdest %d", preg_X_M.dest, preg_D_X.dest);
     preg_X_M.dest = preg_D_X.dest;
-    printf("[EXECUTE] Opcode: 0x%x | ALU Inputs: 0x%lx, 0x%lx | ALU Result: 0x%lx | Dest: X%d\n", preg_D_X.opcode, preg_D_X.reg1_val, preg_D_X.reg2_val, preg_X_M.ALU_result, preg_D_X.dest);
+    // printf("[EXECUTE] Opcode: 0x%x | ALU Inputs: 0x%lx, 0x%lx | ALU Result: 0x%lx | Dest: X%d\n", preg_D_X.opcode, preg_D_X.reg1_val, preg_D_X.reg2_val, preg_X_M.ALU_result, preg_D_X.dest);
 }
 
 void pipe_stage_decode()
 {
     if (flush_pipeline) {
-        printf("[DECODE] flushing pipeline");
+        // printf("[DECODE] flushing pipeline");
         preg_D_X.is_instr = false;
         return;
     }
@@ -485,19 +484,19 @@ void pipe_stage_decode()
         return;
     }
     if (stall_count > 0) {
-        printf("[DECODE] Stalled, instruction held.\n");
+        // printf("[DECODE] Stalled, instruction held.\n");
         preg_D_X.is_instr = true;
         return;
     }
-    printf("[PRESTALL INFO] MEMRead: %x | LDUR destination: X%d | Decode needs: X%d or X%d\n", preg_X_M.op.MemRead, preg_X_M.dest, preg_D_X.reg1, preg_D_X.reg2);
+    // printf("[PRESTALL INFO] MEMRead: %x | LDUR destination: X%d | Decode needs: X%d or X%d\n", preg_X_M.op.MemRead, preg_X_M.dest, preg_D_X.reg1, preg_D_X.reg2);
     preg_D_X.opcode = extract_bits(preg_F_D.instruction, 21, 31);
 	if (preg_F_D.instruction == 0xD4400000) {  // HLT instruction has a fixed encoding
         preg_D_X.is_halt = true;
         preg_D_X.is_instr = true;
         last_instruction = true;
         increment_decode_halt = true;
-        printf("[DECODE] HLT Detected! Stopping pipeline.\n");
-        printf("opcode %d\n", preg_D_X.opcode);
+        // printf("[DECODE] HLT Detected! Stopping pipeline.\n");
+        // printf("opcode %d\n", preg_D_X.opcode);
         return;
     }
     preg_D_X.is_stur = false;
@@ -509,7 +508,7 @@ void pipe_stage_decode()
         uint32_t iw_opcode = extract_bits(preg_F_D.instruction, 23, 25); // Extract bits 25-23
         if ((iw_opcode & 0b111) == 0b101) { //mask bits 25-28 into 101
             handle_iw(preg_F_D.instruction); // IW Format (MOVZ, MOVK, MOVN)
-            printf("DECODE REG1 check for DX: forwarding: %d\n", preg_D_X.reg1);
+            // printf("DECODE REG1 check for DX: forwarding: %d\n", preg_D_X.reg1);
         } else {
             handle_i(preg_F_D.instruction); // Other I-format instructions
         }
@@ -528,16 +527,15 @@ void pipe_stage_decode()
     } else if ((op0 & 0b0111) == 0b0101) { // Data Processing - Register (R-format) //mask to see if x101
         handle_r(preg_F_D.instruction);
     }
-    printf("[PRESTALL INFO2] MEMRead: %x | LDUR destination: X%d | Decode needs: X%d or X%d\n",
-        preg_X_M.op.MemRead, preg_X_M.dest, preg_D_X.reg1, preg_D_X.reg2);
+    // printf("[PRESTALL INFO2] MEMRead: %x | LDUR destination: X%d | Decode needs: X%d or X%d\n", preg_X_M.op.MemRead, preg_X_M.dest, preg_D_X.reg1, preg_D_X.reg2);
     if (preg_X_M.op.MemRead && (preg_X_M.dest == preg_D_X.reg1 || preg_X_M.dest == preg_D_X.reg2) && !preg_D_X.is_load) { //LOAD HAZARD
-        printf("[STALL] Load-use hazard detected. Stalling pipeline.\n");
+        // printf("[STALL] Load-use hazard detected. Stalling pipeline.\n");
         // Hold the instruction in Decode, and prevent Fetch from updating
         stall_pending = true;
         preg_D_X.is_instr = false;
         return;
     }
-    printf("[DECODE] PC: 0x%lx | Instr: 0x%08x | Opcode: 0x%x\n", preg_F_D.instr_PC, preg_F_D.instruction, preg_D_X.opcode); //DEBUG
+    // printf("[DECODE] PC: 0x%lx | Instr: 0x%08x | Opcode: 0x%x\n", preg_F_D.instr_PC, preg_F_D.instruction, preg_D_X.opcode); //DEBUG
     preg_D_X.instr_PC = preg_F_D.instr_PC;
     preg_D_X.next_PC = preg_F_D.next_PC;
     preg_D_X.pred_PC = preg_F_D.pred_PC;
@@ -547,7 +545,7 @@ void pipe_stage_decode()
 void pipe_stage_fetch()
 {
     if (flush_pipeline) {
-        printf("[FETCH] flushing pipeline");
+        // printf("[FETCH] flushing pipeline");
         preg_F_D.is_instr = false;
         flush_pipeline = false;
         return;
@@ -558,13 +556,13 @@ void pipe_stage_fetch()
         stall_count++;
     } else if (stall_count > 0) { //STALLING
         stall_count --;
-        printf("STALLING one cycle\n");
+        // printf("STALLING one cycle\n");
         if (fetch_is_instr) {
-            printf("FETCH WAS INSTR\n");
+            // printf("FETCH WAS INSTR\n");
             preg_F_D.is_instr = true;
         }
         else {
-            printf("FETCH WASNT INSTR\n");
+            // printf("FETCH WASNT INSTR\n");
             fetch_is_instr = true;
             preg_F_D.is_instr = false;
         }
@@ -588,7 +586,7 @@ void pipe_stage_fetch()
     preg_F_D.next_PC = pipe.PC + 4;
 	pipe.PC = preg_F_D.pred_PC; 
 
-    printf("[FETCH] instr_PC: 0x%lx | next_PC: 0x%lx | pred_PC: 0x%lx\n", preg_F_D.instr_PC, preg_F_D.next_PC, preg_F_D.pred_PC);
+    // printf("[FETCH] instr_PC: 0x%lx | next_PC: 0x%lx | pred_PC: 0x%lx\n", preg_F_D.instr_PC, preg_F_D.next_PC, preg_F_D.pred_PC);
 }
 
 
